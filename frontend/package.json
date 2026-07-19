@@ -1,0 +1,12 @@
+{
+  "name": "pricing-tool-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx tailwindcss -i ./src/input.css -o ./public/assets/css/output.css --watch",
+    "build": "npx tailwindcss -i ./src/input.css -o ./public/assets/css/output.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}
