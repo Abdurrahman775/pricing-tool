@@ -2,7 +2,6 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     initSidebar();
-    highlightActivePage();
     initUserGreeting();
 });
 
@@ -36,16 +35,6 @@ function initSidebar() {
     });
 }
 
-function highlightActivePage() {
-    const current = window.location.pathname.split('/').pop() || 'index.php';
-    document.querySelectorAll('.sidebar-link').forEach(link => {
-        const href = link.getAttribute('href');
-        if (href === current) {
-            link.classList.add('sidebar-link-active');
-        }
-    });
-}
-
 async function initUserGreeting() {
     const el = document.getElementById('userName');
     if (!el) return;
@@ -56,6 +45,10 @@ async function initUserGreeting() {
         const data = await res.json();
         if (data.success) {
             el.textContent = data.data.user.name;
+        } else {
+            el.textContent = 'User';
         }
-    } catch {}
+    } catch {
+        el.textContent = 'User';
+    }
 }

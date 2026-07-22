@@ -1,18 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?php
-        require_once dirname(__DIR__, 2) . '/security/middleware.php';
-        startSecureSession();
-        echo generateCsrfToken();
-    ?>">
-    <title>Pricing Tool — Sign In</title>
-    <link rel="stylesheet" href="/assets/css/output.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-</head>
-<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-indigo-100 flex flex-col">
+<?php
+$pageTitle = 'Pricing Tool — Sign In';
+$bodyClass = 'min-h-screen bg-gradient-to-br from-indigo-50 via-white to-indigo-100 flex flex-col';
+require __DIR__ . '/partials/_head.php';
+?>
     <main class="flex-1 flex items-center justify-center px-4 py-12">
         <div class="w-full max-w-sm">
             <div class="text-center mb-8">

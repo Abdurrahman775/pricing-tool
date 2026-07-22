@@ -28,6 +28,13 @@
            focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
+  .btn-info {
+    @apply inline-flex items-center justify-center gap-2 bg-sky-600 text-white
+           px-5 py-2.5 rounded-lg font-medium text-sm
+           hover:bg-sky-700 transition-colors duration-150
+           focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
   .card {
     @apply bg-white rounded-xl border border-gray-200 p-6;
   }
@@ -60,5 +67,17 @@
   }
   .sidebar-link-active {
     @apply sidebar-link bg-indigo-800/60 text-white;
+  }
+  .spinner {
+    @apply inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin;
+  }
+  .loading-state {
+    @apply flex items-center justify-center gap-2 text-gray-400 text-sm py-10;
+  }
+  .empty-state {
+    @apply flex flex-col items-center justify-center gap-2 text-center text-gray-400 text-sm py-10;
+  }
+  .empty-state-icon {
+    @apply w-9 h-9 text-gray-300;
   }
 }

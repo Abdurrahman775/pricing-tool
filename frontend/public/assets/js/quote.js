@@ -15,7 +15,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         await loadProject();
-    } catch {}
+    } catch {
+        document.getElementById('loadingState').textContent = 'Something went wrong loading this page. Please refresh and try again.';
+    }
 });
 
 async function loadProject() {
@@ -75,6 +77,7 @@ function renderProject() {
     document.getElementById('versionProjectBtn').addEventListener('click', handleVersion);
     document.getElementById('genProposalBtn').addEventListener('click', () => generateDoc('proposal'));
     document.getElementById('genPrdBtn').addEventListener('click', () => generateDoc('prd'));
+    document.getElementById('genDocsBtn').addEventListener('click', () => generateDoc('documentation'));
 }
 
 function renderPricing() {
@@ -248,6 +251,7 @@ async function selectPackage(card) {
     document.getElementById('selectedPackageDisplay').innerHTML = `Package: <strong>${escHtml(name)}</strong> (${project.latest_version ? JSON.parse(typeof project.latest_version.pricing_breakdown === 'string' ? project.latest_version.pricing_breakdown : '{}').currency || '₦' : '₦'}${Number(price).toLocaleString()})`;
     document.getElementById('genProposalBtn').disabled = false;
     document.getElementById('genPrdBtn').disabled = false;
+    document.getElementById('genDocsBtn').disabled = false;
 
     // Save selection to backend
     try {
@@ -264,7 +268,13 @@ async function selectPackage(card) {
                 }),
             });
         }
-    } catch {}
+    } catch {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Selection not saved',
+            text: 'Your package selection could not be saved. Please try selecting it again.',
+        });
+    }
 }
 
 async function handleLock() {
@@ -436,7 +446,7 @@ function renderVersionHistory() {
                 <div>
                     <div class="font-medium text-gray-900">Version #${v.version_number} ${isLatest ? '<span class="text-xs text-indigo-600 font-medium">(current)</span>' : ''}</div>
                     <div class="text-xs text-gray-500">${v.screen_points} screen pts · ${v.integration_points} int pts · ×${v.platform_multiplier} platform</div>
-                    <div class="text-xs text-gray-500">Base: ${cur}${Number(v.base_price).toLocaleString()} · Package: ${v.selected_package || '—'}</div>
+                    <div class="text-xs text-gray-500">Base: ${cur}${Number(v.base_price).toLocaleString()} · Package: ${escHtml(v.selected_package || '—')}</div>
                 </div>
                 <div class="text-right text-xs text-gray-400">
                     <div>${new Date(v.created_at).toLocaleDateString()}</div>

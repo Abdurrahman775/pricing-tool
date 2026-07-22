@@ -19,7 +19,7 @@ Each agent owns its directory exclusively. **No agent edits files outside its as
 | **Database** | `database/` | Schema, seed data, migration SQL files. Every table scoped by `user_id`. |
 | **Backend** | `backend/` | PHP API endpoints, auth (session-based), pricing engine, PDO data layer, config CRUD. |
 | **Frontend** | `frontend/` | HTML pages, Tailwind CSS, vanilla JS, SweetAlert2, responsive design. Communicates via `fetch()` to `backend/api/`. |
-| **Doc Generator** | `generator/` | PDF generation (Dompdf), client proposal templates, developer PRD templates, export/import of config JSON. |
+| **Doc Generator** | `generator/` | PDF (Dompdf) and Word (PHPWord) generation, client proposal templates, developer PRD templates, optional AI-assisted drafting (OpenAI-compatible chat completions API, falls back to static templates when unconfigured), export/import of config JSON. |
 | **Security** | `security/` | Input validation middleware, CSRF tokens, rate limiting, XSS prevention, session hardening, audit trail. |
 | **Testing** | `tests/` | Manual test scripts, integration test PHP files, security audit checklists. Runs tests against all other agents' work. |
 
@@ -29,30 +29,38 @@ Each agent owns its directory exclusively. **No agent edits files outside its as
 pricing/
 ├── PRD_Pricing_Tool.docx         # Requirements — read before any feature work
 ├── AGENTS.md                     # This file
-├── .env.example                  # DB creds, app key, base URL
+├── router.php                    # Single entry point (php -S router). Maps /api/* to backend/api/*
+│                                  #   by path, /generate-doc to generator/generate_doc.php,
+│                                  #   /api/config/export|import to generator/export.php|import.php,
+│                                  #   everything else to frontend/public/*
+├── .env.example                  # DB creds, app key, base URL, optional AI_API_KEY/AI_API_URL/AI_MODEL
 ├── database/                     # Database Agent
-│   ├── schema.sql
+│   ├── schema.sql                # All tables (plural, snake_case: users, projects, pricing_configs, ...)
 │   ├── seed.sql
 │   └── migrations/
+│       └── 001_initial_schema.php
 ├── backend/                      # Backend Agent
 │   ├── config/
-│   │   ├── database.php          # PDO connection singleton
-│   │   └── app.php               # App constants, env loading
+│   │   ├── database.php          # PDO connection singleton (getDB())
+│   │   └── app.php                # App constants, env loading (loadEnv())
 │   ├── api/
-│   │   ├── auth/                 # login.php, register.php, logout.php
-│   │   ├── config/               # save_config.php, get_config.php, duplicate_config.php
-│   │   ├── projects/             # create_project.php, get_projects.php, lock_project.php
-│   │   └── quotes/               # calculate_price.php, get_quote.php
-│   ├── models/                   # User.php, Project.php, PricingConfig.php, Quote.php
-│   └── helpers/                  # Validator.php, Response.php, Router.php
+│   │   ├── auth/                  # login.php, register.php, logout.php, me.php, update_profile.php
+│   │   ├── config/                # save_config.php, get_config.php, list_configs.php, duplicate_config.php
+│   │   ├── projects/               # create_project.php, get_project(s).php, update_project.php,
+│   │   │                          #   lock_project.php, version_project.php
+│   │   └── quotes/                # calculate_price.php, select_package.php, list_versions.php
+│   ├── models/                   # User.php, Project.php, PricingConfig.php, QuoteVersion.php
+│   └── helpers/                  # PricingEngine.php, Response.php, Validator.php
 ├── frontend/                     # Frontend Agent
 │   ├── public/
-│   │   ├── index.html            # Landing / login page
-│   │   ├── register.html
-│   │   ├── dashboard.html
-│   │   ├── wizard.html           # First-time config wizard (7 steps)
-│   │   ├── intake.html           # New project intake form
-│   │   ├── quote.html            # Quote view with tier selection
+│   │   ├── index.php             # Landing / login page
+│   │   ├── register.php
+│   │   ├── dashboard.php
+│   │   ├── wizard.php            # First-time config wizard
+│   │   ├── intake.php            # New project intake form
+│   │   ├── quote.php             # Quote view with tier selection
+│   │   ├── quotes.php            # Quote/version history list
+│   │   ├── settings.php          # Config CRUD, export/import
 │   │   └── assets/
 │   │       ├── css/output.css    # Compiled Tailwind
 │   │       └── js/               # *.js files, one per page
@@ -61,19 +69,27 @@ pricing/
 │   └── package.json
 ├── generator/                    # Doc Generator Agent
 │   ├── templates/
-│   │   ├── proposal.php          # Client proposal template
-│   │   └── prd.php               # Developer PRD template
+│   │   ├── proposal.php          # Client proposal template (PDF)
+│   │   ├── proposal_docx.php     # Client proposal template (Word)
+│   │   ├── prd.php                # Developer PRD template (PDF)
+│   │   └── prd_docx.php          # Developer PRD template (Word)
+│   ├── AiClient.php              # OpenAI-compatible chat completions client
+│   ├── AiPrompts.php             # System/user prompt builders for AI-assisted drafting
+│   ├── generate_doc.php          # Entry point (routed from /generate-doc); picks AI vs. template path
 │   ├── PdfGenerator.php          # Dompdf wrapper
-│   └── export.php                # Config JSON export/import
+│   ├── DocxGenerator.php         # PHPWord wrapper
+│   ├── export.php                # Config JSON export
+│   └── import.php                # Config JSON import
 ├── tests/                        # Testing Agent
 │   ├── test_pricing_engine.php   # Exercises backend pricing calculation
 │   ├── test_auth_flow.php        # Signup → login → logout → protected route
+│   ├── test_config_flow.php      # Pricing config CRUD, duplicate, export/import
 │   ├── test_document_gen.php     # Generate PDF, verify content includes out-of-scope section
+│   ├── test_e2e_flow.php         # Full signup → intake → quote → lock → document flow
 │   └── security_audit.md         # Checklist of security requirements to verify manually
 └── security/                     # Security Agent
     ├── middleware.php             # CSRF check, rate-limit check, auth check
-    ├── ratelimit.php
-    └── audit_trail_schema.sql    # audit_log table
+    └── ratelimit.php               # Rate-limit state persisted to backend/cache/ratelimit/*.json
 ```
 
 ---
@@ -170,7 +186,7 @@ php tests/test_document_gen.php
 
 - **Engine:** InnoDB.
 - **Charset:** `utf8mb4` / `utf8mb4_unicode_ci`.
-- **Naming:** `snake_case`, singular table names (`user`, `project`, `pricing_config`, `quote`).
+- **Naming:** `snake_case`, plural table names (`users`, `projects`, `pricing_configs`, `quote_versions`, etc.).
 - **Every table** has:
   - `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
   - `user_id INT UNSIGNED NOT NULL` (multi-tenant scoping)
@@ -224,7 +240,7 @@ The Testing Agent writes standalone PHP scripts in `tests/` that simulate HTTP r
 - **Default pricing template:** Ships with values so a new user can produce a quote on day one without filling any config fields.
 - **Config export/import:** As JSON from settings page. No account merging.
 - **Schema fields for future:** `actual_cost` and `actual_hours` columns on the project/quote table (PRD §10.1 — estimate-vs-actual feedback loop, v1.5).
-- **Document export:** PDF by default in v1. Word export deferred unless users request it.
+- **Document export:** Both PDF (Dompdf) and Word (PHPWord) are implemented, generated via `generator/generate_doc.php`.
 - **Maintenance pricing:** Supports both flat monthly rate and percentage-of-project-price per month (default 10–15%).
 
 ---

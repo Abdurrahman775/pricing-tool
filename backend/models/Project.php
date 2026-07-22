@@ -26,16 +26,17 @@ class Project
         // Save screens
         if (!empty($data['screens'])) {
             $stmt = $db->prepare(
-                'INSERT INTO project_screens (project_id, name, complexity_tier_id, notes)
-                 VALUES (:pid, :name, :tier_id, :notes)'
+                'INSERT INTO project_screens (project_id, name, complexity_tier_id, screen_template_id, notes)
+                 VALUES (:pid, :name, :tier_id, :template_id, :notes)'
             );
             foreach ($data['screens'] as $s) {
                 if (!empty($s['name'])) {
                     $stmt->execute([
-                        'pid'     => $projectId,
-                        'name'    => $s['name'],
-                        'tier_id' => (int) ($s['complexity_tier_id'] ?? 0),
-                        'notes'   => $s['notes'] ?? '',
+                        'pid'         => $projectId,
+                        'name'        => $s['name'],
+                        'tier_id'     => (int) ($s['complexity_tier_id'] ?? 0),
+                        'template_id' => !empty($s['screen_template_id']) ? (int) $s['screen_template_id'] : null,
+                        'notes'       => $s['notes'] ?? '',
                     ]);
                 }
             }
@@ -150,16 +151,17 @@ class Project
         $db->prepare('DELETE FROM project_screens WHERE project_id = :pid')->execute(['pid' => $projectId]);
         if (!empty($data['screens'])) {
             $stmt = $db->prepare(
-                'INSERT INTO project_screens (project_id, name, complexity_tier_id, notes)
-                 VALUES (:pid, :name, :tier_id, :notes)'
+                'INSERT INTO project_screens (project_id, name, complexity_tier_id, screen_template_id, notes)
+                 VALUES (:pid, :name, :tier_id, :template_id, :notes)'
             );
             foreach ($data['screens'] as $s) {
                 if (!empty($s['name'])) {
                     $stmt->execute([
-                        'pid'     => $projectId,
-                        'name'    => $s['name'],
-                        'tier_id' => (int) ($s['complexity_tier_id'] ?? 0),
-                        'notes'   => $s['notes'] ?? '',
+                        'pid'         => $projectId,
+                        'name'        => $s['name'],
+                        'tier_id'     => (int) ($s['complexity_tier_id'] ?? 0),
+                        'template_id' => !empty($s['screen_template_id']) ? (int) $s['screen_template_id'] : null,
+                        'notes'       => $s['notes'] ?? '',
                     ]);
                 }
             }

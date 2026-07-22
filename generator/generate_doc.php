@@ -28,8 +28,8 @@ $docType   = $body['doc_type'] ?? '';
 $packageName  = $body['package_name'] ?? '';
 $packagePrice = (float) ($body['package_price'] ?? 0);
 
-if ($projectId <= 0 || !in_array($docType, ['proposal', 'prd'], true)) {
-    Response::error('Missing or invalid fields: project_id, doc_type (proposal|prd)', 400);
+if ($projectId <= 0 || !in_array($docType, ['proposal', 'prd', 'documentation'], true)) {
+    Response::error('Missing or invalid fields: project_id, doc_type (proposal|prd|documentation)', 400);
 }
 
 $userId = (int) $_SESSION['user_id'];
@@ -77,12 +77,14 @@ $docx = null;
 
 if ($ai->isConfigured()) {
     try {
-        $systemPrompt = $docType === 'proposal'
-            ? AiPrompts::proposalSystemPrompt()
-            : AiPrompts::prdSystemPrompt();
-        $userPrompt = $docType === 'proposal'
-            ? AiPrompts::buildProposalPrompt($templateData)
-            : AiPrompts::buildPrdPrompt($templateData);
+        $promptBuilders = [
+            'proposal'      => ['system' => 'proposalSystemPrompt', 'user' => 'buildProposalPrompt'],
+            'prd'           => ['system' => 'prdSystemPrompt', 'user' => 'buildPrdPrompt'],
+            'documentation' => ['system' => 'documentationSystemPrompt', 'user' => 'buildDocumentationPrompt'],
+        ];
+        $builder = $promptBuilders[$docType];
+        $systemPrompt = AiPrompts::{$builder['system']}();
+        $userPrompt = AiPrompts::{$builder['user']}($templateData);
 
         $aiJson = $ai->generate($systemPrompt, $userPrompt);
         $aiData = json_decode($aiJson, true, 512, JSON_THROW_ON_ERROR);

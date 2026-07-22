@@ -68,13 +68,30 @@ if ($isNew) {
 }
 
 // Save child records: delete all existing, then re-insert
+// Screen templates must be deleted before complexity_tiers (FK dependency), and
+// re-inserted after (since tiers get fresh ids below, resolved by name).
+$db->prepare('DELETE FROM screen_templates WHERE pricing_config_id = :cid')->execute(['cid' => $configId]);
+
 // Complexity tiers
 $db->prepare('DELETE FROM complexity_tiers WHERE pricing_config_id = :cid')->execute(['cid' => $configId]);
+$tierIdByName = [];
 if (!empty($body['complexity_tiers']) && is_array($body['complexity_tiers'])) {
     $stmt = $db->prepare('INSERT INTO complexity_tiers (pricing_config_id, name, multiplier, sort_order) VALUES (:cid, :name, :mul, :so)');
     foreach ($body['complexity_tiers'] as $i => $tier) {
         if (!empty($tier['name'])) {
             $stmt->execute(['cid' => $configId, 'name' => $tier['name'], 'mul' => (float) ($tier['multiplier'] ?? 1.0), 'so' => $i + 1]);
+            $tierIdByName[$tier['name']] = (int) $db->lastInsertId();
+        }
+    }
+}
+
+// Screen templates (reference tiers by name since tier ids are recreated on every save)
+if (!empty($body['screen_templates']) && is_array($body['screen_templates'])) {
+    $stmt = $db->prepare('INSERT INTO screen_templates (pricing_config_id, name, complexity_tier_id, sort_order) VALUES (:cid, :name, :tier_id, :so)');
+    foreach ($body['screen_templates'] as $i => $st) {
+        $tierId = $tierIdByName[$st['complexity_tier_name'] ?? ''] ?? null;
+        if (!empty($st['name']) && $tierId) {
+            $stmt->execute(['cid' => $configId, 'name' => $st['name'], 'tier_id' => $tierId, 'so' => $i + 1]);
         }
     }
 }

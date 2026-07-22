@@ -6,7 +6,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await checkAuth();
         await loadQuotes();
-    } catch {}
+    } catch {
+        const container = document.getElementById('quoteList');
+        container.className = 'empty-state';
+        container.textContent = 'Something went wrong loading this page. Please refresh and try again.';
+    }
 });
 
 async function loadQuotes() {
@@ -19,10 +23,15 @@ async function loadQuotes() {
         const data = await res.json();
 
         if (!data.success || !data.data.projects?.length) {
-            container.innerHTML = 'No quotes yet. <a href="/intake.php" class="text-indigo-600 font-medium hover:underline">Create your first quote</a>.';
+            container.className = 'empty-state';
+            container.innerHTML = `
+                <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0l-2.5 5a2 2 0 01-1.8 1H8.3a2 2 0 01-1.8-1L4 13m16 0h-3.5a1 1 0 00-.9.5l-.7 1.4a1 1 0 01-.9.6h-2a1 1 0 01-.9-.6l-.7-1.4a1 1 0 00-.9-.5H4"/></svg>
+                <p>No quotes yet.</p>
+                <a href="/intake.php" class="text-indigo-600 font-medium hover:underline">Create your first quote</a>`;
             return;
         }
 
+        container.className = '';
         container.innerHTML = '';
         const table = document.createElement('table');
         table.className = 'w-full text-left';
@@ -54,7 +63,8 @@ async function loadQuotes() {
         `;
         container.appendChild(table);
     } catch {
-        container.innerHTML = 'Failed to load quotes. Please try again.';
+        container.className = 'empty-state';
+        container.textContent = 'Failed to load quotes. Please try again.';
     }
 }
 

@@ -96,6 +96,7 @@ async function checkAuth() {
     const result = await res.json();
     if (!result.success) {
         window.location.href = '/';
+        return null;
     }
     return result.data.user;
 }

@@ -94,7 +94,13 @@ async function loadConfigsForExport() {
                 sel.appendChild(opt);
             });
         }
-    } catch {}
+    } catch {
+        const sel = document.getElementById('exportConfigSelect');
+        const opt = document.createElement('option');
+        opt.textContent = 'Failed to load configurations';
+        opt.disabled = true;
+        sel.appendChild(opt);
+    }
 }
 
 function toggleExportBtn() {

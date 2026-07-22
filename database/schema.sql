@@ -44,6 +44,19 @@ CREATE TABLE complexity_tiers (
     INDEX idx_config_id (pricing_config_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Screen Templates (predefined screens per config, selectable as checkboxes on intake)
+CREATE TABLE screen_templates (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    pricing_config_id INT UNSIGNED NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    complexity_tier_id INT UNSIGNED NOT NULL,
+    sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pricing_config_id) REFERENCES pricing_configs(id) ON DELETE CASCADE,
+    FOREIGN KEY (complexity_tier_id) REFERENCES complexity_tiers(id),
+    INDEX idx_config_id (pricing_config_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Integration Catalog (predefined + custom per config)
 CREATE TABLE integrations (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -114,10 +127,12 @@ CREATE TABLE project_screens (
     project_id INT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
     complexity_tier_id INT UNSIGNED NOT NULL,
+    screen_template_id INT UNSIGNED DEFAULT NULL,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     FOREIGN KEY (complexity_tier_id) REFERENCES complexity_tiers(id),
+    FOREIGN KEY (screen_template_id) REFERENCES screen_templates(id) ON DELETE SET NULL,
     INDEX idx_project_id (project_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

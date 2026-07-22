@@ -1,16 +1,88 @@
-// Wizard Module — 8-step pricing configuration wizard
+// Wizard Module — 9-step pricing configuration wizard
 
 const API = '/api/config';
 let currentStep = 1;
-const totalSteps = 8;
+const totalSteps = 9;
 let wizardData = {};
+let editConfigId = 0;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initWizard();
     initStep1();
     initDynamicRows();
     initMaintenanceToggle();
+
+    const params = new URLSearchParams(window.location.search);
+    editConfigId = parseInt(params.get('edit')) || 0;
+
+    if (editConfigId) {
+        await loadConfigForEdit(editConfigId);
+    } else {
+        addScreenTmplRow();
+    }
 });
+
+async function loadConfigForEdit(id) {
+    try {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const res = await fetch(`${API}/get_config.php?id=${id}`, {
+            headers: { 'X-CSRF-Token': csrf },
+        });
+        const data = await res.json();
+        if (!data.success || !data.data.config) {
+            Swal.fire({ icon: 'error', title: 'Failed to load', text: data.error || 'Could not load this configuration for editing.' });
+            addScreenTmplRow();
+            return;
+        }
+        populateWizardForEdit(data.data.config);
+    } catch {
+        Swal.fire({ icon: 'error', title: 'Network error', text: 'Could not reach the server.' });
+        addScreenTmplRow();
+    }
+}
+
+function populateWizardForEdit(cfg) {
+    document.title = 'Pricing Tool — Edit Configuration';
+
+    const heading = document.getElementById('step1Heading');
+    if (heading) heading.textContent = 'Edit Configuration';
+    const desc = document.getElementById('step1Desc');
+    if (desc) desc.textContent = `Update the details of "${cfg.name}" below.`;
+    document.getElementById('templateChoiceGrid')?.classList.add('hidden');
+
+    document.getElementById('configName').value = cfg.name || '';
+    document.getElementById('currency').value = cfg.currency || '₦';
+    document.getElementById('baseRate').value = parseFloat(cfg.base_rate) || 0;
+
+    document.getElementById('tiersBody').innerHTML = '';
+    (cfg.complexity_tiers || []).forEach(t => addRow('tiersBody', ['text', 'number'], [t.name, parseFloat(t.multiplier)]));
+
+    document.getElementById('screenTmplBody').innerHTML = '';
+    (cfg.screen_templates || []).forEach(st => addScreenTmplRow({ name: st.name, complexity_tier_name: st.tier_name }));
+    if (!(cfg.screen_templates || []).length) addScreenTmplRow();
+
+    document.getElementById('intsBody').innerHTML = '';
+    (cfg.integrations || []).forEach(i => addRow('intsBody', ['text', 'number'], [i.name, parseInt(i.points)]));
+
+    document.getElementById('platformsBody').innerHTML = '';
+    (cfg.platform_multipliers || []).forEach(p => addRow('platformsBody', ['text', 'number'], [p.platform, parseFloat(p.multiplier)]));
+
+    document.getElementById('packagesBody').innerHTML = '';
+    (cfg.package_tiers || []).forEach(p => addRow('packagesBody', ['text', 'number'], [p.name, parseFloat(p.multiplier)]));
+
+    if (cfg.maintenance) {
+        const model = cfg.maintenance.model || 'percentage';
+        const radio = document.querySelector(`input[name="maintenance_model"][value="${model}"]`);
+        if (radio) {
+            radio.checked = true;
+            radio.dispatchEvent(new Event('change'));
+        }
+        document.getElementById('maintValue').value = cfg.maintenance.value ?? 15;
+    }
+
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn) saveBtn.textContent = 'Save Changes';
+}
 
 function initWizard() {
     const nextBtn = document.getElementById('nextBtn');
@@ -50,6 +122,10 @@ function showStep(step) {
     prevBtn.classList.toggle('hidden', step === 1);
     nextBtn.classList.toggle('hidden', step === totalSteps);
     saveBtn.classList.toggle('hidden', step !== totalSteps);
+
+    if (step === 4) {
+        refreshScreenTmplTierOptions();
+    }
 
     if (step === totalSteps) {
         buildReview();
@@ -94,7 +170,7 @@ function validateStep(step) {
             return false;
         }
     }
-    if (step === 5) {
+    if (step === 6) {
         const rows = document.querySelectorAll('#platformsBody tr');
         if (rows.length === 0) {
             Swal.fire({ icon: 'warning', title: 'Platforms required', text: 'Add at least one platform' });
@@ -127,6 +203,16 @@ function collectStepData(step) {
         });
     }
     if (step === 4) {
+        wizardData.screen_templates = [];
+        document.querySelectorAll('#screenTmplBody tr').forEach(row => {
+            const name = row.querySelector('.screen-tmpl-name')?.value.trim();
+            const tierName = row.querySelector('.screen-tmpl-tier')?.value;
+            if (name && tierName) {
+                wizardData.screen_templates.push({ name, complexity_tier_name: tierName });
+            }
+        });
+    }
+    if (step === 5) {
         wizardData.integrations = [];
         const names = document.querySelectorAll('input[name="int_name[]"]');
         const points = document.querySelectorAll('input[name="int_points[]"]');
@@ -139,7 +225,7 @@ function collectStepData(step) {
             }
         });
     }
-    if (step === 5) {
+    if (step === 6) {
         wizardData.platform_multipliers = [];
         const names = document.querySelectorAll('input[name="platform_name[]"]');
         const multis = document.querySelectorAll('input[name="platform_multiplier[]"]');
@@ -152,13 +238,13 @@ function collectStepData(step) {
             }
         });
     }
-    if (step === 6) {
+    if (step === 7) {
         wizardData.maintenance = {
             model: document.querySelector('input[name="maintenance_model"]:checked')?.value || 'percentage',
             value: parseFloat(document.querySelector('input[name="maintenance_value"]').value) || 0,
         };
     }
-    if (step === 7) {
+    if (step === 8) {
         wizardData.package_tiers = [];
         const names = document.querySelectorAll('input[name="pkg_name[]"]');
         const multis = document.querySelectorAll('input[name="pkg_multiplier[]"]');
@@ -174,7 +260,7 @@ function collectStepData(step) {
 }
 
 function buildReview() {
-    collectStepData(7);
+    collectStepData(8);
     const container = document.getElementById('reviewContent');
     const d = wizardData;
 
@@ -186,6 +272,14 @@ function buildReview() {
         html += `<div class="bg-indigo-50 rounded-lg p-4"><span class="text-indigo-600 font-medium block mb-1">Complexity Tiers:</span>`;
         d.complexity_tiers.forEach(t => {
             html += `<span class="inline-block bg-indigo-100 rounded px-2 py-0.5 text-xs text-indigo-700 mr-1 mb-1">${escHtml(t.name)} ×${t.multiplier}</span>`;
+        });
+        html += `</div>`;
+    }
+
+    if (d.screen_templates?.length) {
+        html += `<div class="bg-indigo-50 rounded-lg p-4"><span class="text-indigo-600 font-medium block mb-1">Screen Templates:</span>`;
+        d.screen_templates.forEach(s => {
+            html += `<span class="inline-block bg-indigo-100 rounded px-2 py-0.5 text-xs text-indigo-700 mr-1 mb-1">${escHtml(s.name)} (${escHtml(s.complexity_tier_name)})</span>`;
         });
         html += `</div>`;
     }
@@ -225,35 +319,46 @@ function buildReview() {
 async function handleSave(e) {
     e.preventDefault();
     if (!validateStep(1)) return;
-    collectStepData(7);
+    collectStepData(8);
 
     const result = await Swal.fire({
-        title: 'Save Configuration?',
-        text: `Save "${wizardData.name}" as a new pricing configuration`,
+        title: editConfigId ? 'Update Configuration?' : 'Save Configuration?',
+        text: editConfigId ? `Update "${wizardData.name}"` : `Save "${wizardData.name}" as a new pricing configuration`,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Save',
+        confirmButtonText: editConfigId ? 'Update' : 'Save',
         cancelButtonText: 'Review again',
     });
     if (!result.isConfirmed) return;
 
     Swal.fire({ title: 'Saving...', text: 'Please wait', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
-    // Use default template data if starting from default
-    if (wizardData.template_choice === 'default' && !wizardData.complexity_tiers?.length) {
+    if (editConfigId) {
+        wizardData.id = editConfigId;
+    }
+
+    // Use default template data if starting from default (never applies when editing an existing config)
+    if (!editConfigId && wizardData.template_choice === 'default' && !wizardData.complexity_tiers?.length) {
         try {
             const resp = await fetch(`${API}/get_config.php?id=1`);
             const data = await resp.json();
             if (data.success && data.data.config) {
                 const tmpl = data.data.config;
                 wizardData.complexity_tiers = tmpl.complexity_tiers.map(t => ({ name: t.name, multiplier: parseFloat(t.multiplier) }));
+                wizardData.screen_templates = (tmpl.screen_templates || []).map(s => ({ name: s.name, complexity_tier_name: s.tier_name }));
                 wizardData.integrations = tmpl.integrations.map(i => ({ name: i.name, points: parseInt(i.points) }));
                 wizardData.platform_multipliers = tmpl.platform_multipliers.map(p => ({ platform: p.platform, multiplier: parseFloat(p.multiplier) }));
                 wizardData.package_tiers = tmpl.package_tiers.map(p => ({ name: p.name, multiplier: parseFloat(p.multiplier) }));
                 wizardData.currency = tmpl.currency;
                 wizardData.base_rate = parseFloat(tmpl.base_rate);
             }
-        } catch {}
+        } catch {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Could not load default template',
+                text: 'You can still continue and fill in the configuration manually.',
+            });
+        }
     }
 
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -269,8 +374,8 @@ async function handleSave(e) {
         if (resultData.success) {
             Swal.fire({
                 icon: 'success',
-                title: 'Configuration Saved!',
-                text: `"${wizardData.name}" is ready to use`,
+                title: editConfigId ? 'Configuration Updated!' : 'Configuration Saved!',
+                text: editConfigId ? `"${wizardData.name}" has been updated` : `"${wizardData.name}" is ready to use`,
                 timer: 2000,
                 showConfirmButton: false,
             }).then(() => {
@@ -300,6 +405,9 @@ function initDynamicRows() {
     document.getElementById('tiersBody')?.addEventListener('click', (e) => {
         if (e.target.classList.contains('remove-tier')) e.target.closest('tr')?.remove();
     });
+    document.getElementById('screenTmplBody')?.addEventListener('click', (e) => {
+        if (e.target.classList.contains('remove-screen-tmpl')) e.target.closest('tr')?.remove();
+    });
     document.getElementById('intsBody')?.addEventListener('click', (e) => {
         if (e.target.classList.contains('remove-int')) e.target.closest('tr')?.remove();
     });
@@ -308,6 +416,40 @@ function initDynamicRows() {
     });
     document.getElementById('packagesBody')?.addEventListener('click', (e) => {
         if (e.target.classList.contains('remove-pkg')) e.target.closest('tr')?.remove();
+    });
+    document.getElementById('addScreenTmplBtn')?.addEventListener('click', () => addScreenTmplRow());
+}
+
+function currentTierNames() {
+    return Array.from(document.querySelectorAll('input[name="tier_name[]"]'))
+        .map(el => el.value.trim())
+        .filter(Boolean);
+}
+
+function addScreenTmplRow(data) {
+    data = data || {};
+    const tbody = document.getElementById('screenTmplBody');
+    if (!tbody) return;
+    const tierNames = currentTierNames();
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-gray-100';
+    tr.innerHTML = `
+        <td class="py-2 pr-4"><input type="text" class="screen-tmpl-name w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" placeholder="e.g. Login Screen" value="${escHtml(data.name || '')}"></td>
+        <td class="py-2 pr-4">
+            <select class="screen-tmpl-tier w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                ${tierNames.map(name => `<option value="${escHtml(name)}" ${name === data.complexity_tier_name ? 'selected' : ''}>${escHtml(name)}</option>`).join('')}
+            </select>
+        </td>
+        <td class="py-2"><button type="button" class="remove-screen-tmpl text-red-400 hover:text-red-300 text-sm">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function refreshScreenTmplTierOptions() {
+    const tierNames = currentTierNames();
+    document.querySelectorAll('#screenTmplBody .screen-tmpl-tier').forEach(select => {
+        const current = select.value;
+        select.innerHTML = tierNames.map(name => `<option value="${escHtml(name)}" ${name === current ? 'selected' : ''}>${escHtml(name)}</option>`).join('');
     });
 }
 
@@ -328,7 +470,13 @@ function addRow(tbodyId, types, defaults) {
         const type = types[i] || 'text';
         html += `<td class="py-2 pr-4"><input type="${type}" name="${name}" value="${defaults[i] || ''}" class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300"></td>`;
     });
-    const removeClass = tbodyId === 'intsBody' ? 'remove-int' : tbodyId === 'packagesBody' ? 'remove-pkg' : 'remove-tier';
+    const removeClassMap = {
+        tiersBody: 'remove-tier',
+        intsBody: 'remove-int',
+        platformsBody: 'remove-platform',
+        packagesBody: 'remove-pkg',
+    };
+    const removeClass = removeClassMap[tbodyId] || 'remove-tier';
     html += `<td class="py-2"><button type="button" class="${removeClass} text-red-400 hover:text-red-300 text-sm">Remove</button></td>`;
     tr.innerHTML = html;
     tbody.appendChild(tr);

@@ -42,6 +42,17 @@ class PricingConfig
         );
         $stmt->execute(['new_id' => $newConfigId, 'template_id' => $template['id']]);
 
+        // Copy screen templates (remapped to the new config's complexity tier ids, matched by name)
+        $stmt = $db->prepare(
+            'INSERT INTO screen_templates (pricing_config_id, name, complexity_tier_id, sort_order)
+             SELECT :new_id, st.name, newtier.id, st.sort_order
+             FROM screen_templates st
+             JOIN complexity_tiers oldtier ON oldtier.id = st.complexity_tier_id
+             JOIN complexity_tiers newtier ON newtier.pricing_config_id = :new_id2 AND newtier.name = oldtier.name
+             WHERE st.pricing_config_id = :template_id'
+        );
+        $stmt->execute(['new_id' => $newConfigId, 'new_id2' => $newConfigId, 'template_id' => $template['id']]);
+
         // Copy integrations
         $stmt = $db->prepare(
             'INSERT INTO integrations (pricing_config_id, name, points, sort_order)
@@ -97,8 +108,23 @@ class PricingConfig
             ['name' => 'Complex',    'multiplier' => 3.5,  'sort_order' => 3],
         ];
         $stmt = $db->prepare('INSERT INTO complexity_tiers (pricing_config_id, name, multiplier, sort_order) VALUES (:cid, :name, :mul, :so)');
+        $tierIdByName = [];
         foreach ($tiers as $t) {
             $stmt->execute(['cid' => $configId, 'name' => $t['name'], 'mul' => $t['multiplier'], 'so' => $t['sort_order']]);
+            $tierIdByName[$t['name']] = (int) $db->lastInsertId();
+        }
+
+        $screenTemplates = [
+            ['name' => 'Login / Sign Up',    'tier' => 'Simple',  'sort_order' => 1],
+            ['name' => 'Dashboard / Home',   'tier' => 'Medium',  'sort_order' => 2],
+            ['name' => 'User Profile',       'tier' => 'Simple',  'sort_order' => 3],
+            ['name' => 'Settings',           'tier' => 'Simple',  'sort_order' => 4],
+            ['name' => 'Search & Filters',   'tier' => 'Medium',  'sort_order' => 5],
+            ['name' => 'Checkout / Payment', 'tier' => 'Complex', 'sort_order' => 6],
+        ];
+        $stmt = $db->prepare('INSERT INTO screen_templates (pricing_config_id, name, complexity_tier_id, sort_order) VALUES (:cid, :name, :tier_id, :so)');
+        foreach ($screenTemplates as $s) {
+            $stmt->execute(['cid' => $configId, 'name' => $s['name'], 'tier_id' => $tierIdByName[$s['tier']], 'so' => $s['sort_order']]);
         }
 
         $integrations = [
@@ -154,6 +180,15 @@ class PricingConfig
         $stmt = $db->prepare('SELECT * FROM complexity_tiers WHERE pricing_config_id = :cid ORDER BY sort_order');
         $stmt->execute(['cid' => $configId]);
         $config['complexity_tiers'] = $stmt->fetchAll();
+
+        $stmt = $db->prepare(
+            'SELECT st.*, ct.name AS tier_name, ct.multiplier AS tier_multiplier
+             FROM screen_templates st
+             LEFT JOIN complexity_tiers ct ON ct.id = st.complexity_tier_id
+             WHERE st.pricing_config_id = :cid ORDER BY st.sort_order'
+        );
+        $stmt->execute(['cid' => $configId]);
+        $config['screen_templates'] = $stmt->fetchAll();
 
         $stmt = $db->prepare('SELECT * FROM integrations WHERE pricing_config_id = :cid ORDER BY sort_order');
         $stmt->execute(['cid' => $configId]);
@@ -211,6 +246,17 @@ class PricingConfig
             );
             $copyStmt->execute(['new_id' => $newId, 'old_id' => $configId]);
         }
+
+        // Screen templates need their complexity_tier_id remapped to the new config's tiers (matched by name)
+        $stmt = $db->prepare(
+            'INSERT INTO screen_templates (pricing_config_id, name, complexity_tier_id, sort_order)
+             SELECT :new_id, st.name, newtier.id, st.sort_order
+             FROM screen_templates st
+             JOIN complexity_tiers oldtier ON oldtier.id = st.complexity_tier_id
+             JOIN complexity_tiers newtier ON newtier.pricing_config_id = :new_id2 AND newtier.name = oldtier.name
+             WHERE st.pricing_config_id = :old_id'
+        );
+        $stmt->execute(['new_id' => $newId, 'new_id2' => $newId, 'old_id' => $configId]);
 
         return $newId;
     }

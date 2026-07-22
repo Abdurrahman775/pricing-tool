@@ -3,6 +3,7 @@
 const API = '/api';
 let configs = [];
 let tiers = [];
+let screenTemplates = [];
 let integrations = [];
 let platformMultipliers = [];
 let configCurrency = '₦';
@@ -43,7 +44,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const h1 = document.querySelector('h1');
             if (h1) h1.textContent = 'Edit Project';
         }
-    } catch {}
+    } catch {
+        Swal.fire({
+            icon: 'error',
+            title: 'Failed to load',
+            text: 'Something went wrong loading this page. Please refresh and try again.',
+        });
+    }
 });
 
 async function loadConfigs(selectConfigId) {
@@ -90,13 +97,62 @@ async function loadConfigDetails(configId) {
 
     const cfg = data.data.config;
     tiers = cfg.complexity_tiers || [];
+    screenTemplates = cfg.screen_templates || [];
     integrations = cfg.integrations || [];
     platformMultipliers = cfg.platform_multipliers || [];
     configCurrency = cfg.currency || '₦';
 
+    loadScreenTemplates();
     loadIntegrations();
     loadPlatforms();
     recalculate();
+}
+
+function loadScreenTemplates() {
+    const container = document.getElementById('screenTemplatesList');
+    if (!container) return;
+
+    const presentTemplateIds = Array.from(document.querySelectorAll('#screensBody tr[data-template-id]'))
+        .map(row => row.dataset.templateId)
+        .filter(Boolean);
+
+    if (!screenTemplates.length) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = screenTemplates.map(st =>
+        `<label class="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-lg border border-gray-200 hover:border-indigo-300 transition-colors">
+            <input type="checkbox" value="${st.id}" ${presentTemplateIds.includes(String(st.id)) ? 'checked' : ''} class="screen-tmpl-checkbox rounded text-indigo-600">
+            <span class="text-gray-700 text-sm">${escHtml(st.name)} <span class="text-gray-400 text-xs">(${escHtml(st.tier_name || '')})</span></span>
+        </label>`
+    ).join('');
+
+    document.querySelectorAll('.screen-tmpl-checkbox').forEach(cb => {
+        cb.addEventListener('change', function () {
+            const templateId = this.value;
+            if (this.checked) {
+                if (!document.querySelector(`#screensBody tr[data-template-id="${templateId}"]`)) {
+                    const st = screenTemplates.find(s => String(s.id) === templateId);
+                    if (st) {
+                        addScreenRow({ name: st.name, complexity_tier_id: st.complexity_tier_id, notes: '' }, st.id);
+                    }
+                }
+            } else {
+                document.querySelectorAll(`#screensBody tr[data-template-id="${templateId}"]`).forEach(row => row.remove());
+            }
+            recalculate();
+        });
+    });
+}
+
+function syncScreenTemplateCheckboxes() {
+    const presentTemplateIds = Array.from(document.querySelectorAll('#screensBody tr[data-template-id]'))
+        .map(row => row.dataset.templateId)
+        .filter(Boolean);
+    document.querySelectorAll('.screen-tmpl-checkbox').forEach(cb => {
+        cb.checked = presentTemplateIds.includes(cb.value);
+    });
 }
 
 function loadIntegrations() {
@@ -175,7 +231,13 @@ function initEventListeners() {
     document.getElementById('screensBody').addEventListener('change', recalculate);
     document.getElementById('screensBody').addEventListener('click', (e) => {
         if (e.target.classList.contains('remove-screen')) {
-            e.target.closest('tr')?.remove();
+            const row = e.target.closest('tr');
+            const templateId = row?.dataset.templateId;
+            row?.remove();
+            if (templateId) {
+                const cb = document.querySelector(`.screen-tmpl-checkbox[value="${templateId}"]`);
+                if (cb) cb.checked = false;
+            }
             recalculate();
         }
     });
@@ -189,11 +251,14 @@ function initEventListeners() {
     document.getElementById('addCustomIntBtn').addEventListener('click', () => addCustomIntegration());
 }
 
-function addScreenRow(data) {
+function addScreenRow(data, templateId) {
     data = data || {};
     const tbody = document.getElementById('screensBody');
     const row = document.createElement('tr');
     row.className = 'border-b border-gray-100';
+    if (templateId != null && templateId !== '') {
+        row.dataset.templateId = templateId;
+    }
     row.innerHTML = `
         <td class="py-2 pr-4">
             <input type="text" class="screen-name w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="e.g. Login Screen" value="${escHtml(data.name || '')}">
@@ -245,7 +310,8 @@ function populateEditForm() {
             name: s.name,
             complexity_tier_id: s.complexity_tier_id,
             notes: s.notes || '',
-        }));
+        }, s.screen_template_id));
+        syncScreenTemplateCheckboxes();
     }
 
     // Integration checkboxes
@@ -283,6 +349,7 @@ function getScreens() {
         name: row.querySelector('.screen-name')?.value || '',
         complexity_tier_id: parseInt(row.querySelector('.screen-tier')?.value || '0'),
         notes: row.querySelector('.screen-notes')?.value || '',
+        screen_template_id: row.dataset.templateId ? parseInt(row.dataset.templateId) : null,
     })).filter(s => s.name.trim());
 }
 
@@ -344,7 +411,12 @@ async function doCalculate() {
         if (!data.success) return;
 
         renderPricing(data.data.breakdown);
-    } catch {}
+    } catch {
+        const loader = document.getElementById('pricingLoader');
+        loader.textContent = 'Unable to calculate pricing right now.';
+        loader.classList.remove('hidden');
+        document.getElementById('pricingContent').classList.add('hidden');
+    }
 }
 
 function renderPricing(bd) {
