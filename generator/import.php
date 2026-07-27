@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/backend/helpers/Response.php';
 require_once dirname(__DIR__) . '/backend/helpers/Validator.php';
+require_once dirname(__DIR__) . '/backend/config/database.php';
 require_once dirname(__DIR__) . '/security/middleware.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

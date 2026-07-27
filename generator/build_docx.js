@@ -94,7 +94,7 @@ function buildCover(data) {
     { label: 'Project', value: data.project },
     { label: 'Client', value: data.client },
     { label: 'Package', value: data.package },
-    { label: 'Price', value: `${data.currency}${data.price}` },
+    { label: 'Price', value: `${data.currency}${String(data.price).replace(data.currency, '').trim()}` },
     { label: 'Valid Until', value: new Date(Date.now() + 30*86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) }
   ];
   const colW = Math.floor(9000 / 2);

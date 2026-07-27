@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/helpers/Response.php';
+require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__) . '/../../security/middleware.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

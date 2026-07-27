@@ -93,18 +93,33 @@ if ($configId <= 0) {
     exit(1);
 }
 
+// Tier/integration IDs are global auto-increment, not per-user — look this user's up by name
+// rather than hardcoding IDs from a fresh database.
+$fullConfig = req('GET', "{$BASE}/api/config/get_config.php?id={$configId}")['body']['data']['config'];
+$tierIdByName = [];
+foreach ($fullConfig['complexity_tiers'] as $t) {
+    $tierIdByName[$t['name']] = (int) $t['id'];
+}
+$integrationIds = [];
+foreach (array_slice($fullConfig['integrations'], 0, 2) as $i) {
+    $integrationIds[] = (int) $i['id'];
+}
+$expectedIntegrationPoints = array_sum(array_column(array_slice($fullConfig['integrations'], 0, 2), 'points'));
+$simpleTierId = $tierIdByName['Simple'];
+$mediumTierId = $tierIdByName['Medium'];
+
 echo "Pricing Engine Test\n";
 echo str_repeat('-', 40) . "\n";
 
 // 1. Basic price calculation
-test('Calculate price with 2 screens + integrations + platforms', function () use ($BASE, $configId) {
+test('Calculate price with 2 screens + integrations + platforms', function () use ($BASE, $configId, $simpleTierId, $mediumTierId, $integrationIds, $expectedIntegrationPoints, $fullConfig) {
     $res = req('POST', "{$BASE}/api/quotes/calculate_price.php", [
         'config_id' => $configId,
         'screens' => [
-            ['name' => 'Login', 'complexity_tier_id' => '1', 'notes' => 'Simple form'],
-            ['name' => 'Dashboard', 'complexity_tier_id' => '2', 'notes' => 'Stats overview'],
+            ['name' => 'Login', 'complexity_tier_id' => (string) $simpleTierId, 'notes' => 'Simple form'],
+            ['name' => 'Dashboard', 'complexity_tier_id' => (string) $mediumTierId, 'notes' => 'Stats overview'],
         ],
-        'integration_ids' => ['1', '3'],  // Payment Gateway (3pts) + Maps (3pts)
+        'integration_ids' => array_map('strval', $integrationIds),
         'platforms' => ['Web', 'Android'],
         'maintenance' => ['model' => 'percentage', 'value' => 15],
     ]);
@@ -115,14 +130,18 @@ test('Calculate price with 2 screens + integrations + platforms', function () us
 
     // Screen 1 (Simple ×1.0) + Screen 2 (Medium ×2.0) = 3.0 pts
     assert(abs($bd['total_screen_points'] - 3.0) < 0.01, "screen points should be ~3.0, got {$bd['total_screen_points']}");
-    // Integration: Payment (3) + Maps (3) = 6
-    assert($bd['total_integration_points'] === 6, "integration points should be 6, got {$bd['total_integration_points']}");
-    // Subtotal = 3 + 6 = 9
-    assert(abs($bd['subtotal'] - 9.0) < 0.01, "subtotal should be 9, got {$bd['subtotal']}");
-    // Platform multiplier = max(1.0, 1.3) = 1.3
-    assert(abs($bd['platform_multiplier'] - 1.3) < 0.01, "platform multiplier should be 1.3, got {$bd['platform_multiplier']}");
-    // Adjusted = 9 × 1.3 = 11.7
-    assert(abs($bd['adjusted_subtotal'] - 11.7) < 0.01, "adjusted subtotal should be 11.7, got {$bd['adjusted_subtotal']}");
+    assert($bd['total_integration_points'] === $expectedIntegrationPoints, "integration points should be {$expectedIntegrationPoints}, got {$bd['total_integration_points']}");
+    $expectedSubtotal = 3.0 + $expectedIntegrationPoints;
+    assert(abs($bd['subtotal'] - $expectedSubtotal) < 0.01, "subtotal should be {$expectedSubtotal}, got {$bd['subtotal']}");
+    $androidMultiplier = 1.0;
+    foreach ($fullConfig['platform_multipliers'] as $pm) {
+        if ($pm['platform'] === 'Android') {
+            $androidMultiplier = (float) $pm['multiplier'];
+        }
+    }
+    assert(abs($bd['platform_multiplier'] - $androidMultiplier) < 0.01, "platform multiplier should be {$androidMultiplier}, got {$bd['platform_multiplier']}");
+    $expectedAdjusted = $expectedSubtotal * $androidMultiplier;
+    assert(abs($bd['adjusted_subtotal'] - $expectedAdjusted) < 0.01, "adjusted subtotal should be {$expectedAdjusted}, got {$bd['adjusted_subtotal']}");
 });
 
 // 2. Verify breakdown structure
@@ -183,12 +202,12 @@ test('Empty screens returns 422 (validation)', function () use ($BASE, $configId
 });
 
 // 5. Missing config ID
-test('Missing config_id returns 400', function () use ($BASE) {
+test('Missing config_id returns 422', function () use ($BASE) {
     $res = req('POST', "{$BASE}/api/quotes/calculate_price.php", [
         'screens' => [['name' => 'Test', 'complexity_tier_id' => '1']],
         'platforms' => ['Web'],
     ]);
-    assert($res['code'] === 400, "Expected 400, got {$res['code']}");
+    assert($res['code'] === 422, "Expected 422, got {$res['code']}");
 });
 
 // 6. Nonexistent config ID

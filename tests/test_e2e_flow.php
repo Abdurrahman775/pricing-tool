@@ -134,7 +134,7 @@ test('Get full config details', function () use ($BASE, &$configId) {
 
 // 3. Export config
 test('Export config as JSON', function () use ($BASE, $configId) {
-    $res = req('POST', "{$BASE}/generator/export.php", ['config_id' => $configId]);
+    $res = req('POST', "{$BASE}/api/config/export", ['config_id' => $configId]);
     assert($res['code'] === 200, "Expected 200, got {$res['code']}");
     assert($res['contentType'] === 'application/json; charset=utf-8', 'should be JSON');
     $parsed = json_decode($res['raw'], true);
@@ -146,11 +146,11 @@ test('Export config as JSON', function () use ($BASE, $configId) {
 // 4. Import config (create new from exported data)
 test('Import config from JSON data', function () use ($BASE, $configId) {
     // First get the export data to re-import
-    $export = req('POST', "{$BASE}/generator/export.php", ['config_id' => $configId]);
+    $export = req('POST', "{$BASE}/api/config/export", ['config_id' => $configId]);
     $importData = json_decode($export['raw'], true);
     $importData['name'] = 'Imported Config';
 
-    $res = req('POST', "{$BASE}/generator/import.php", $importData);
+    $res = req('POST', "{$BASE}/api/config/import", $importData);
     assert(in_array($res['code'], [201, 200]), "Expected 201/200, got {$res['code']} — " . ($res['body']['error'] ?? ''));
     assert(($res['body']['success'] ?? false) === true, 'success should be true');
     assert(($res['body']['data']['imported'] ?? false) === true, 'imported should be true');
@@ -274,7 +274,7 @@ test('Generate PRD DOCX with out-of-scope section', function () use ($BASE, $pro
     assert(str_contains($xml, 'Product Requirements Document'), 'should contain PRD header');
     assert(str_contains($xml, 'Out of Scope'), 'should contain Out of Scope section');
     assert(str_contains($xml, 'explicitly excluded'), 'should mention excluded items');
-    assert(str_contains($xml, 'Screens &amp; Complexity'), 'should contain screens section');
+    assert(str_contains($xml, 'Screens & Complexity'), 'should contain screens section');
     assert(str_contains($xml, 'Integrations'), 'should contain integrations section');
     assert(str_contains($xml, 'Platforms'), 'should contain platforms section');
     assert(str_contains($xml, 'Pricing Breakdown'), 'should contain pricing breakdown');

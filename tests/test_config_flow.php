@@ -49,7 +49,7 @@ function test(string $name, callable $fn): void
 
 function request(string $method, string $url, array $data = []): array
 {
-    global $cookieJar;
+    global $cookieJar, $csrfToken;
     $ch = curl_init($url);
     $opts = [
         CURLOPT_RETURNTRANSFER => true,
@@ -60,7 +60,7 @@ function request(string $method, string $url, array $data = []): array
     $headers = ['Content-Type: application/json'];
     if ($method === 'POST') {
         $opts[CURLOPT_POST] = true;
-        $headers[] = 'X-CSRF-Token: test';
+        $headers[] = 'X-CSRF-Token: ' . $csrfToken;
         $opts[CURLOPT_POSTFIELDS] = json_encode($data);
     }
     $opts[CURLOPT_HTTPHEADER] = $headers;
@@ -79,6 +79,7 @@ function getConfigId(array $list): int
 }
 
 // First register/login to get a valid session
+$csrfToken = fetchCsrf();
 $testEmail = 'config_test_' . time() . '@example.com';
 $regRes = request('POST', "{$BASE}/api/auth/register.php", [
     'name' => 'Config Tester',

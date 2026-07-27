@@ -16,7 +16,8 @@ declare(strict_types=1);
  * 7. Register with duplicate email (should fail)
  */
 
-$BASE = 'http://localhost:8000/api/auth';
+$ROOT = 'http://localhost:8000';
+$BASE = "{$ROOT}/api/auth";
 $pass = 0;
 $fail = 0;
 
@@ -33,12 +34,30 @@ function test(string $name, callable $fn): void
     }
 }
 
-function post(string $url, array $data): array
+function fetchCsrf(): string
+{
+    global $ROOT;
+    $ch = curl_init("{$ROOT}/");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_COOKIEJAR      => '/tmp/test_cookies.txt',
+        CURLOPT_COOKIEFILE     => '/tmp/test_cookies.txt',
+    ]);
+    $html = curl_exec($ch);
+    curl_close($ch);
+    preg_match('/<meta name="csrf-token" content="([^"]+)">/', $html, $m);
+    return $m[1] ?? '';
+}
+
+function post(string $url, array $data, string $csrfToken = ''): array
 {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'X-CSRF-Token: ' . $csrfToken,
+        ],
         CURLOPT_POSTFIELDS     => json_encode($data),
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HEADER         => true,
@@ -76,47 +95,52 @@ echo str_repeat('-', 40) . "\n";
 $testEmail = 'test_' . time() . '@example.com';
 $testPass  = 'TestPass123!';
 
+// Fresh session — grab a CSRF token before any POST
+@unlink('/tmp/test_cookies.txt');
+$csrfToken = fetchCsrf();
+
 // 1. Register
-test('Register new user', function () use ($BASE, $testEmail, $testPass) {
+test('Register new user', function () use ($BASE, $testEmail, $testPass, $csrfToken) {
     $res = post("{$BASE}/register.php", [
         'name'     => 'Test User',
         'email'    => $testEmail,
         'password' => $testPass,
-    ]);
+    ], $csrfToken);
     assert($res['code'] === 201, "Expected 201, got {$res['code']} — " . ($res['body']['error'] ?? ''));
     assert($res['body']['success'] === true, 'success should be true');
     assert(isset($res['body']['data']['user']['id']), 'user id not returned');
 });
 
 // 2. Duplicate email
-test('Register duplicate email', function () use ($BASE, $testEmail, $testPass) {
+test('Register duplicate email', function () use ($BASE, $testEmail, $testPass, $csrfToken) {
     $res = post("{$BASE}/register.php", [
         'name'     => 'Test User 2',
         'email'    => $testEmail,
         'password' => $testPass,
-    ]);
+    ], $csrfToken);
     assert($res['code'] === 409, "Expected 409, got {$res['code']}");
 });
 
 // Clear cookies to simulate fresh session
 @unlink('/tmp/test_cookies.txt');
+$csrfToken = fetchCsrf();
 
 // 3. Login
-test('Login with correct credentials', function () use ($BASE, $testEmail, $testPass) {
+test('Login with correct credentials', function () use ($BASE, $testEmail, $testPass, $csrfToken) {
     $res = post("{$BASE}/login.php", [
         'email'    => $testEmail,
         'password' => $testPass,
-    ]);
+    ], $csrfToken);
     assert($res['code'] === 200, "Expected 200, got {$res['code']} — " . ($res['body']['error'] ?? ''));
     assert($res['body']['success'] === true, 'success should be true');
 });
 
 // 4. Login with wrong password
-test('Login with wrong password', function () use ($BASE, $testEmail) {
+test('Login with wrong password', function () use ($BASE, $testEmail, $csrfToken) {
     $res = post("{$BASE}/login.php", [
         'email'    => $testEmail,
         'password' => 'WrongPassword999!',
-    ]);
+    ], $csrfToken);
     assert($res['code'] === 401, "Expected 401, got {$res['code']}");
     assert($res['body']['success'] === false, 'success should be false');
 });
@@ -130,8 +154,8 @@ test('Access protected route (authenticated)', function () use ($BASE) {
 });
 
 // 6. Logout
-test('Logout', function () use ($BASE) {
-    $res = post("{$BASE}/logout.php", []);
+test('Logout', function () use ($BASE, $csrfToken) {
+    $res = post("{$BASE}/logout.php", [], $csrfToken);
     assert($res['code'] === 200, "Expected 200, got {$res['code']} — " . ($res['body']['error'] ?? ''));
     assert($res['body']['success'] === true, 'success should be true');
 });

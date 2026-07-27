@@ -237,11 +237,19 @@ class PricingConfig
         ]);
         $newId = (int) $db->lastInsertId();
 
-        // Copy all child tables
-        foreach (['complexity_tiers', 'integrations', 'platform_multipliers', 'package_tiers', 'maintenance_settings'] as $table) {
+        // Copy all child tables (each table only has a subset of these columns)
+        $tableColumns = [
+            'complexity_tiers'      => ['name', 'multiplier', 'sort_order'],
+            'integrations'          => ['name', 'points', 'sort_order'],
+            'platform_multipliers'  => ['platform', 'multiplier'],
+            'package_tiers'         => ['name', 'multiplier', 'sort_order'],
+            'maintenance_settings'  => ['model', 'value'],
+        ];
+        foreach ($tableColumns as $table => $columns) {
+            $columnList = implode(', ', $columns);
             $copyStmt = $db->prepare(
-                "INSERT INTO {$table} (pricing_config_id, name, multiplier, sort_order, points, platform, model, value)
-                 SELECT :new_id, name, multiplier, sort_order, points, platform, model, value
+                "INSERT INTO {$table} (pricing_config_id, {$columnList})
+                 SELECT :new_id, {$columnList}
                  FROM {$table} WHERE pricing_config_id = :old_id"
             );
             $copyStmt->execute(['new_id' => $newId, 'old_id' => $configId]);

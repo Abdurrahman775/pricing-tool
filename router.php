@@ -6,6 +6,23 @@ loadEnv();
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
+// Route document generation to generator
+if ($uri === '/generate-doc') {
+    require __DIR__ . '/generator/generate_doc.php';
+    return true;
+}
+
+// Route config export/import to generator (must come before the generic /api/* handler below,
+// since these paths don't correspond to files under backend/api/)
+if ($uri === '/api/config/export') {
+    require __DIR__ . '/generator/export.php';
+    return true;
+}
+if ($uri === '/api/config/import') {
+    require __DIR__ . '/generator/import.php';
+    return true;
+}
+
 // Route API requests to backend
 if (str_starts_with($uri, '/api/')) {
     $base = realpath(__DIR__ . '/backend');
@@ -17,22 +34,6 @@ if (str_starts_with($uri, '/api/')) {
     http_response_code(404);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['success' => false, 'error' => 'API endpoint not found']);
-    return true;
-}
-
-// Route document generation to generator
-if ($uri === '/generate-doc') {
-    require __DIR__ . '/generator/generate_doc.php';
-    return true;
-}
-
-// Route config export/import to generator
-if ($uri === '/api/config/export') {
-    require __DIR__ . '/generator/export.php';
-    return true;
-}
-if ($uri === '/api/config/import') {
-    require __DIR__ . '/generator/import.php';
     return true;
 }
 
