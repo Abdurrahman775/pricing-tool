@@ -4,6 +4,12 @@ declare(strict_types=1);
 // Load .env
 function loadEnv(string $path = null): void
 {
+    // Platform-injected environment variables (e.g. Render's dashboard config)
+    // take precedence and don't require a .env file to exist on disk.
+    foreach (getenv() as $key => $value) {
+        $_ENV[$key] = $value;
+    }
+
     $path = $path ?? dirname(__DIR__, 2) . '/.env';
     if (!file_exists($path)) {
         return;
